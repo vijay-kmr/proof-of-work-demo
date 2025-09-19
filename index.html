@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Proof-of-Work Demo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+        .animate-spin-slow {
+            animation: spin 1.5s linear infinite;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white flex items-center justify-center min-h-screen p-4">
+    <div class="bg-slate-800 p-8 rounded-2xl shadow-2xl w-full max-w-xl md:p-12">
+        <h1 class="text-3xl font-bold mb-6 text-center text-orange-400">Proof-of-Work Nonce Finder</h1>
+        <p class="text-slate-400 mb-8 text-center">
+            A simple demonstration of how 'mining' works. We'll find a number (nonce) that, when added to your data, produces a hash with a specific number of leading zeros.
+        </p>
+        
+        <div class="mb-6">
+            <label for="dataInput" class="block text-sm font-medium text-slate-300 mb-2">Data / Block Content</label>
+            <input type="text" id="dataInput" value="Our Class is the Best!" class="w-full p-3 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors">
+        </div>
+
+        <div class="mb-8">
+            <label for="difficultyInput" class="block text-sm font-medium text-slate-300 mb-2">Difficulty (Number of leading zeros)</label>
+            <input type="number" id="difficultyInput" value="3" min="1" max="6" class="w-full p-3 rounded-lg bg-slate-700 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 transition-colors">
+        </div>
+        
+        <button id="mineButton" class="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 px-4 rounded-lg transition-all duration-200 shadow-lg">
+            Find Nonce
+        </button>
+
+        <div id="statusArea" class="mt-8 text-center text-slate-400 text-sm h-6 flex items-center justify-center"></div>
+
+        <div id="results" class="mt-8 space-y-4">
+            <div>
+                <span class="block text-sm font-medium text-orange-400">Nonce Found:</span>
+                <span id="nonceResult" class="block text-xl font-mono text-white mt-1 break-all">-</span>
+            </div>
+            <div>
+                <span class="block text-sm font-medium text-orange-400">Final Hash:</span>
+                <span id="hashResult" class="block text-sm font-mono text-white mt-1 break-all">-</span>
+            </div>
+            <div>
+                <span class="block text-sm font-medium text-orange-400">Execution Time:</span>
+                <span id="timeResult" class="block text-xl font-mono text-white mt-1">-</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dataInput = document.getElementById('dataInput');
+        const difficultyInput = document.getElementById('difficultyInput');
+        const mineButton = document.getElementById('mineButton');
+        const nonceResult = document.getElementById('nonceResult');
+        const hashResult = document.getElementById('hashResult');
+        const timeResult = document.getElementById('timeResult');
+        const statusArea = document.getElementById('statusArea');
+
+        // This function converts an ArrayBuffer to a hexadecimal string.
+        function bufferToHex(buffer) {
+            return [...new Uint8Array(buffer)]
+                .map(x => x.toString(16).padStart(2, '0'))
+                .join('');
+        }
+
+        // The main function that performs the proof-of-work.
+        async function findNonce() {
+            const data = dataInput.value;
+            const difficulty = parseInt(difficultyInput.value, 10);
+            
+            // Check for valid difficulty.
+            if (isNaN(difficulty) || difficulty < 1) {
+                statusArea.textContent = 'Please enter a valid difficulty (a positive number).';
+                return;
+            }
+
+            const target = '0'.repeat(difficulty);
+            let nonce = 0;
+            let hash = '';
+            
+            // Start the timer.
+            const startTime = performance.now();
+
+            // Use a web worker to prevent the UI from freezing.
+            const worker = new Worker(URL.createObjectURL(new Blob([`
+                async function sha256(str) {
+                    const text = new TextEncoder().encode(str);
+                    const hashBuffer = await crypto.subtle.digest('SHA-256', text);
+                    return hashBuffer;
+                }
+
+                self.onmessage = async (e) => {
+                    const { data, difficulty, nonce, target } = e.data;
+                    let currentNonce = nonce;
+                    let hashHex = '';
+                    while (true) {
+                        const textToHash = \`\${data}\${currentNonce}\`;
+                        const hashBuffer = await sha256(textToHash);
+                        const hex = [...new Uint8Array(hashBuffer)].map(x => x.toString(16).padStart(2, '0')).join('');
+                        if (hex.startsWith(target)) {
+                            self.postMessage({ nonce: currentNonce, hash: hex });
+                            return;
+                        }
+                        currentNonce++;
+                    }
+                };
+            `], { type: 'application/javascript' })));
+
+            // Message for the worker.
+            worker.postMessage({ data, difficulty, nonce: 0, target });
+
+            statusArea.innerHTML = `<span class="inline-block animate-spin-slow">🌀</span> Mining...`;
+            mineButton.disabled = true;
+
+            worker.onmessage = (e) => {
+                const endTime = performance.now();
+                const elapsedTime = (endTime - startTime) / 1000;
+
+                // Display the results.
+                nonceResult.textContent = e.data.nonce;
+                hashResult.textContent = e.data.hash;
+                timeResult.textContent = `${elapsedTime.toFixed(4)} seconds`;
+
+                // Reset UI elements.
+                statusArea.textContent = 'Nonce found successfully!';
+                mineButton.disabled = false;
+                worker.terminate();
+            };
+        }
+
+        // Add event listener to the button.
+        mineButton.addEventListener('click', findNonce);
+    </script>
+</body>
+</html>
