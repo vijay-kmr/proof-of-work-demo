@@ -51,6 +51,10 @@
                 <span id="nonceResult" class="block text-xl font-mono text-white mt-1 break-all">-</span>
             </div>
             <div>
+                <span class="block text-sm font-medium text-orange-400">Final String:</span>
+                <span id="finalStringResult" class="block text-sm font-mono text-white mt-1 break-all">-</span>
+            </div>
+            <div>
                 <span class="block text-sm font-medium text-orange-400">Final Hash:</span>
                 <span id="hashResult" class="block text-sm font-mono text-white mt-1 break-all">-</span>
             </div>
@@ -66,6 +70,7 @@
         const difficultyInput = document.getElementById('difficultyInput');
         const mineButton = document.getElementById('mineButton');
         const nonceResult = document.getElementById('nonceResult');
+        const finalStringResult = document.getElementById('finalStringResult');
         const hashResult = document.getElementById('hashResult');
         const timeResult = document.getElementById('timeResult');
         const statusArea = document.getElementById('statusArea');
@@ -129,10 +134,14 @@
             worker.onmessage = (e) => {
                 const endTime = performance.now();
                 const elapsedTime = (endTime - startTime) / 1000;
-
+                
+                const finalNonce = e.data.nonce;
+                const finalHash = e.data.hash;
+                
                 // Display the results.
-                nonceResult.textContent = e.data.nonce;
-                hashResult.textContent = e.data.hash;
+                nonceResult.textContent = finalNonce;
+                finalStringResult.textContent = `${dataInput.value}${finalNonce}`;
+                hashResult.textContent = finalHash;
                 timeResult.textContent = `${elapsedTime.toFixed(4)} seconds`;
 
                 // Reset UI elements.
